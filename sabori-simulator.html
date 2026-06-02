@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>さぼりシミュレーター</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      background: #f5f4f0;
+      color: #2c2c2a;
+      font-size: 14px;
+      padding: 1rem;
+    }
+    .container { max-width: 680px; margin: 0 auto; padding-bottom: 3rem; }
+    .page-title { font-size: 22px; font-weight: 500; margin: 1rem 0 0.25rem; }
+    .page-sub { font-size: 13px; color: #888780; margin-bottom: 1.5rem; }
+    .card {
+      background: #fff;
+      border: 0.5px solid rgba(0,0,0,0.12);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+    h3 { font-size: 15px; font-weight: 500; margin-bottom: 12px; }
+    .lbl { font-size: 13px; color: #5F5E5A; margin-bottom: 8px; display: block; }
+    .task-input {
+      width: 100%;
+      font-size: 14px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 0.5px solid rgba(0,0,0,0.2);
+      background: #f5f4f0;
+      color: #2c2c2a;
+      font-family: inherit;
+    }
+    .task-input::placeholder { color: #B4B2A9; }
+    .input-row { margin-bottom: 14px; }
+    .btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
+    .sel-btn {
+      padding: 6px 11px;
+      border-radius: 8px;
+      border: 1.5px solid #aaa;
+      background: #e8e8e4;
+      color: #555;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+      font-family: inherit;
+    }
+    .sel-btn.active {
+      border-color: #BA7517;
+      background: #EF9F27;
+      color: #fff;
+      font-weight: 700;
+    }
+    .apply-btn {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1.5px solid #185FA5;
+      background: #185FA5;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-bottom: 1rem;
+      font-family: inherit;
+      transition: opacity 0.15s;
+    }
+    .apply-btn:active { opacity: 0.8; transform: scale(0.98); }
+    .pending-note { font-size: 12px; color: #BA7517; margin-bottom: 8px; min-height: 18px; }
+    .section-header { font-size: 16px; font-weight: 500; margin: 0 0 4px; }
+    .section-header-sub { font-size: 12px; color: #888780; margin: 0 0 12px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1rem; }
+    .mcard { background: #f5f4f0; border-radius: 8px; padding: 0.75rem 1rem; }
+    .mcard .mtitle { font-size: 12px; font-weight: 500; margin-bottom: 2px; }
+    .mcard .msub { font-size: 11px; color: #888780; margin-bottom: 6px; }
+    .mcard .mv { font-size: 13px; font-weight: 500; line-height: 1.5; }
+    .verdict { border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem; font-size: 14px; line-height: 1.7; }
+    .time-now { font-size: 12px; color: #888780; margin-bottom: 12px; }
+    .finish-box {
+      background: #f5f4f0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 1rem;
+      font-size: 13px;
+      line-height: 2;
+    }
+    .finish-box span { font-weight: 500; }
+    .graph-section-title { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+    .graph-section-sub { font-size: 12px; color: #888780; margin-bottom: 10px; }
+    .conflict-box {
+      border-radius: 8px;
+      border: 0.5px solid rgba(0,0,0,0.12);
+      background: #f5f4f0;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .conflict-item {
+      flex: 1;
+      min-width: 120px;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      text-align: center;
+      line-height: 1.5;
+    }
+    .conflict-task   { background: #E6F1FB; color: #0C447C; }
+    .conflict-sabori { background: #E1F5EE; color: #085041; }
+    .conflict-arrow  { font-size: 18px; color: #888780; flex-shrink: 0; text-align: center; }
+    .conflict-label  { width: 100%; font-size: 11px; color: #888780; text-align: center; margin-top: 6px; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <p class="page-title">さぼりシミュレーター</p>
+  <p class="page-sub">やるべきことをさぼったら、自分の心はどうなるか。2つの未来を比較する。</p>
+
+  <div class="card">
+    <h3>さぼりたいタスク</h3>
+    <div class="input-row">
+      <span class="lbl">タスク名</span>
+      <input class="task-input" type="text" id="task-name" placeholder="例：A社への見積もり送付" maxlength="40">
+    </div>
+    <div class="input-row" style="margin-bottom:0;">
+      <span class="lbl">このタスクの所要時間（集中した場合）</span>
+      <div class="btn-group" id="task-time-btns">
+        <button class="sel-btn" data-min="15">15分</button>
+        <button class="sel-btn active" data-min="30">30分</button>
+        <button class="sel-btn" data-min="60">1時間</button>
+        <button class="sel-btn" data-min="180">3時間</button>
+        <button class="sel-btn" data-min="240">半日</button>
+        <button class="sel-btn" data-min="480">終日</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>さぼり中に何をする？</h3>
+    <div class="input-row">
+      <span class="lbl">さぼり中の過ごし方</span>
+      <input class="task-input" type="text" id="sabori-what" placeholder="例：マックでClaudeと話す" maxlength="40">
+    </div>
+    <div class="input-row">
+      <span class="lbl">その幸福レベル</span>
+      <div class="btn-group" id="sabori-happy-btns">
+        <button class="sel-btn" data-val="1">退屈</button>
+        <button class="sel-btn" data-val="2">まあまあ</button>
+        <button class="sel-btn active" data-val="3">楽しい</button>
+        <button class="sel-btn" data-val="4">かなり楽しい</button>
+        <button class="sel-btn" data-val="5">最高</button>
+      </div>
+    </div>
+    <div class="input-row" style="margin-bottom:0;">
+      <span class="lbl">さぼり見込み時間</span>
+      <div class="btn-group" id="duration-btns">
+        <button class="sel-btn" data-min="10">10分</button>
+        <button class="sel-btn active" data-min="30">30分</button>
+        <button class="sel-btn" data-min="60">1時間</button>
+        <button class="sel-btn" data-min="180">3時間</button>
+        <button class="sel-btn" data-min="360">6時間</button>
+        <button class="sel-btn" data-min="480">1日</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>今の自分の状態</h3>
+    <div class="time-now" id="time-now"></div>
+    <div class="input-row">
+      <span class="lbl">今の心の状態</span>
+      <div class="btn-group" id="fatigue-btns">
+        <button class="sel-btn" data-val="1">遊びたい</button>
+        <button class="sel-btn" data-val="2">元気</button>
+        <button class="sel-btn active" data-val="3">普通</button>
+        <button class="sel-btn" data-val="4">だるい・疲れた</button>
+        <button class="sel-btn" data-val="5">限界</button>
+      </div>
+    </div>
+    <div class="input-row">
+      <span class="lbl">タスクの重要度</span>
+      <div class="btn-group" id="importance-btns">
+        <button class="sel-btn" data-val="2">低い</button>
+        <button class="sel-btn" data-val="4">やや低い</button>
+        <button class="sel-btn active" data-val="6">普通</button>
+        <button class="sel-btn" data-val="8">高い</button>
+        <button class="sel-btn" data-val="10">最重要</button>
+      </div>
+    </div>
+    <div class="input-row" style="margin-bottom:0;">
+      <span class="lbl">締切までの余裕</span>
+      <div class="btn-group" id="deadline-btns">
+        <button class="sel-btn" data-val="1" data-min="180">今すぐ</button>
+        <button class="sel-btn" data-val="1.5" data-min="180">3時間以内</button>
+        <button class="sel-btn active" data-val="2" data-min="480">今日中</button>
+        <button class="sel-btn" data-val="3" data-min="1440">明日まで</button>
+        <button class="sel-btn" data-val="4" data-min="4320">今週中</button>
+        <button class="sel-btn" data-val="5" data-min="10080">来週以降</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="finish-box" id="finish-box"></div>
+
+  <p class="section-header">今と未来の私の心</p>
+  <p class="section-header-sub">入力内容をもとに算出した、今この瞬間〜さぼり後の心の状態予測</p>
+  <div class="grid2">
+    <div class="mcard">
+      <div class="mtitle">さぼり中の幸福度</div>
+      <div class="msub">今この瞬間の心の状態</div>
+      <div class="mv" id="m-sabori-peak" style="color:#1D9E75;"></div>
+      <div style="font-size:11px;color:#888780;margin-top:4px;" id="m-sabori-what"></div>
+    </div>
+    <div class="mcard">
+      <div class="mtitle">さぼった後の後悔コスト</div>
+      <div class="msub">さぼり時間終了後の心の見込み</div>
+      <div class="mv" id="m-night-cost" style="color:#D85A30;"></div>
+    </div>
+    <div class="mcard">
+      <div class="mtitle">タスクに取り組む時の苦痛</div>
+      <div class="msub">今すぐやり始める辛さ</div>
+      <div class="mv" id="m-work-pain" style="color:#D85A30;"></div>
+    </div>
+    <div class="mcard">
+      <div class="mtitle">タスク完了後の解放感</div>
+      <div class="msub">終わった後の心の軽さ</div>
+      <div class="mv" id="m-work-gain" style="color:#1D9E75;"></div>
+    </div>
+  </div>
+
+  <div class="pending-note" id="pending-note"></div>
+  <button class="apply-btn" id="apply-btn">グラフに反映する</button>
+
+  <p class="graph-section-title">心のグラフ</p>
+  <p class="graph-section-sub" id="graph-section-sub"></p>
+  <div class="conflict-box" id="conflict-box">
+    <div class="conflict-item conflict-task" id="conflict-task">タスク名を入力してください</div>
+    <div class="conflict-arrow">⚔️</div>
+    <div class="conflict-item conflict-sabori" id="conflict-sabori">さぼり中の過ごし方を入力してください</div>
+    <div class="conflict-label">この2つの葛藤が、心の状態を2つの未来へ分岐させる</div>
+  </div>
+  <div style="position:relative;width:100%;height:300px;margin-bottom:1rem;">
+    <canvas id="chart" role="img" aria-label="締切までの心の変化グラフ">締切までの心の変化。</canvas>
+  </div>
+
+  <div class="verdict" id="verdict-box"></div>
+</div>
+
+<script>
+let committed = { importance:6, deadline:2, deadlineMin:480, fatigue:3, duration:30, taskTime:30, saboriHappy:3 };
+let pending   = { ...committed };
+let pendingTime = null;
+
+const LABELS_HAPPY  = {1:'😑 退屈（時間を無駄にした感）',2:'🙂 まあまあ（悪くはない）',3:'😄 楽しい（気分転換になった）',4:'😁 かなり楽しい（充実してた）',5:'🤩 最高（これが人生）'};
+const LABELS_REGRET = {1:'😌 余裕（内心焦ってる）',2:'😟 少し焦り（ソワソワ）',3:'😢 厳しい（泣く、情けを求める）',4:'😰 大変（風呂も歯磨きもできない）',5:'😱 絶望（睡眠・食事がとれない）'};
+const LABELS_PAIN   = {1:'😎 余裕（すぐ終わる気がする）',2:'😐 少ししんどい（でも動ける）',3:'😣 まあまあ辛い（気合いが要る）',4:'😩 かなり辛い（手が止まる）',5:'💀 地獄（取り掛かれる気がしない）'};
+const LABELS_GAIN   = {1:'😶 普通（やって当然）',2:'😊 少し楽（肩の荷が降りた）',3:'😌 解放（夜がうまい）',4:'😤 爽快（自分を褒めたい）',5:'🥳 最高（ビール1本じゃ足りない）'};
+const DEADLINE_LABELS = {1:'今すぐ',1.5:'3時間以内',2:'今日中',3:'明日まで',4:'今週中',5:'来週以降'};
+
+function formatTime(date, showDate) {
+  const h = date.getHours(), m = date.getMinutes();
+  const mm = m < 10 ? '0'+m : ''+m;
+  const isNext = date.getDate() !== new Date().getDate();
+  if (showDate && isNext) return (date.getMonth()+1)+'/'+(date.getDate())+' '+h+':'+mm;
+  return (isNext?'翌':'')+h+':'+mm;
+}
+function addMin(base, min) { return new Date(base.getTime() + min*60000); }
+function taskTimeLabel(min) {
+  return {15:'15分',30:'30分',60:'1時間',180:'3時間',240:'半日',480:'終日'}[min] || min+'分';
+}
+function getConfig(deadlineMin) {
+  if (deadlineMin <= 180)  return { interval:30,   unit:'30分',  showDate:false };
+  if (deadlineMin <= 480)  return { interval:60,   unit:'1時間', showDate:false };
+  if (deadlineMin <= 1440) return { interval:180,  unit:'3時間', showDate:true  };
+  if (deadlineMin <= 4320) return { interval:360,  unit:'6時間', showDate:true  };
+  return                          { interval:1440, unit:'1日',   showDate:true  };
+}
+function computeScores(s) {
+  const urgency = (6 - s.deadline) * 1.5;
+  const df = Math.min(3, s.duration / 60);
+  return {
+    saboriPeak: Math.min(5, s.saboriHappy),
+    nightCost:  Math.min(5, Math.max(1, Math.round((urgency*1.1 + s.importance*0.6 + df*0.5) / 2))),
+    workPain:   Math.min(5, Math.max(1, Math.round((s.fatigue*0.6 + (11-s.importance)*0.15) / 1.5))),
+    workGain:   Math.min(5, Math.max(1, Math.round((urgency*0.9 + s.importance*0.5 + 2) / 2))),
+  };
+}
+
+function updateConflictBox() {
+  const t = document.getElementById('task-name').value.trim();
+  const w = document.getElementById('sabori-what').value.trim();
+  document.getElementById('conflict-task').textContent   = t || 'タスク名を入力してください';
+  document.getElementById('conflict-sabori').textContent = w || 'さぼり中の過ごし方を入力してください';
+}
+function updateCards() {
+  const sc = computeScores(pending);
+  const w = document.getElementById('sabori-what').value.trim();
+  document.getElementById('m-sabori-peak').textContent = LABELS_HAPPY[sc.saboriPeak]  || '';
+  document.getElementById('m-sabori-what').textContent = w ? '「'+w+'」中の満足度' : '';
+  document.getElementById('m-night-cost').textContent  = LABELS_REGRET[sc.nightCost]  || '';
+  document.getElementById('m-work-pain').textContent   = LABELS_PAIN[sc.workPain]     || '';
+  document.getElementById('m-work-gain').textContent   = LABELS_GAIN[sc.workGain]     || '';
+}
+function updatePendingNote() {
+  document.getElementById('pending-note').textContent =
+    JSON.stringify(pending) !== JSON.stringify(committed)
+      ? '⚠️ 入力が変更されています。「グラフに反映する」を押してください。' : '';
+}
+function updateTimeNow() {
+  const now = new Date();
+  document.getElementById('time-now').textContent =
+    '現在時刻：'+now.getHours()+':'+(now.getMinutes()<10?'0':'')+now.getMinutes();
+}
+function updateFinishBox() {
+  const tn = document.getElementById('task-name').value.trim() || 'このタスク';
+  const now = new Date();
+  const fe = addMin(now, pending.taskTime);
+  const de = addMin(now, pending.taskTime * 2);
+  const dl = pending.taskTime*2 >= 480 ? '終日超' : taskTimeLabel(pending.taskTime*2);
+  document.getElementById('finish-box').innerHTML =
+    '📋 <span>'+tn+'</span> に今すぐ取り掛かると…<br>'+
+    '　🎯 集中（'+taskTimeLabel(pending.taskTime)+'）：<span>'+formatTime(fe,false)+'</span> 完了<br>'+
+    '　😪 だらだら（'+dl+'）：<span>'+formatTime(de,false)+'</span> 完了';
+}
+
+let chart;
+function renderGraph() {
+  const s = committed;
+  const now = pendingTime || new Date();
+  const sc = computeScores(s);
+  const cfg = getConfig(s.deadlineMin);
+  const steps = Math.ceil(s.deadlineMin / cfg.interval);
+  const labels = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = formatTime(addMin(now, i * cfg.interval), cfg.showDate);
+    labels.push(i === steps ? '⚠️締切 '+t : t);
+  }
+  const saboriEndStep = s.duration / cfg.interval;
+  const focusEndStep  = s.taskTime / cfg.interval;
+  const saboriData = labels.map((_, i) => {
+    if (i === 0) return Math.max(1, sc.saboriPeak - (s.fatigue > 3 ? 1 : 0));
+    if (i <= saboriEndStep) return Math.min(5, sc.saboriPeak);
+    const r = Math.min(1, (i - saboriEndStep) / Math.max(1, steps - saboriEndStep));
+    return Math.max(1, Math.round(sc.saboriPeak - r * (sc.nightCost + 1)));
+  });
+  const workData = labels.map((_, i) => {
+    if (i === 0) return Math.max(1, 4 - sc.workPain);
+    if (i < focusEndStep) return Math.max(1, 3 - sc.workPain + 1);
+    return Math.min(5, sc.workGain + (i > focusEndStep ? 1 : 0));
+  });
+
+  const taskName   = document.getElementById('task-name').value.trim();
+  const saboriWhat = document.getElementById('sabori-what').value.trim();
+  const dlLabel    = DEADLINE_LABELS[s.deadline] || '';
+
+  document.getElementById('graph-section-sub').textContent =
+    '締切「'+dlLabel+'」を終点に（'+cfg.unit+'刻み）　反映時刻：'+
+    now.getHours()+':'+(now.getMinutes()<10?'0':'')+now.getMinutes();
+
+  const verdict = document.getElementById('verdict-box');
+  const saboriNet = sc.saboriPeak - sc.nightCost;
+  const workNet   = sc.workGain   - sc.workPain;
+  const taskRef   = taskName ? '「'+taskName+'」を' : 'タスクを';
+  const whatRef   = saboriWhat ? '「'+saboriWhat+'」で過ごすより、' : '';
+  let msg, bg, color;
+  if (workNet > saboriNet + 1) {
+    msg = whatRef + taskRef + '今すぐ取り組んだ方が、締切までの心が断然楽になる。';
+    bg = '#E1F5EE'; color = '#0F6E56';
+  } else if (saboriNet > workNet + 1) {
+    msg = taskRef + 'さぼってもダメージは少ない。締切・重要度が低めなので、今は休息優先でOK。';
+    bg = '#FAEEDA'; color = '#854F0B';
+  } else {
+    msg = '五分五分。少しだけ進めてから'+(saboriWhat?'「'+saboriWhat+'」':'一息')+'に切り替える「中間策」が心に一番やさしい。';
+    bg = '#E6F1FB'; color = '#185FA5';
+  }
+  verdict.textContent = msg;
+  verdict.style.background = bg;
+  verdict.style.color = color;
+  verdict.style.padding = '1rem 1.25rem';
+  verdict.style.borderRadius = '8px';
+  verdict.style.fontSize = '14px';
+  verdict.style.lineHeight = '1.7';
+
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('chart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'さぼる'+(saboriWhat?'（'+saboriWhat+'）':''), data: saboriData, borderColor:'#1D9E75', tension:0.4, fill:false, pointRadius:3 },
+        { label: '今すぐ取り組む'+(taskName?'（'+taskName+'）':''), data: workData, borderColor:'#185FA5', tension:0.4, fill:false, pointRadius:3, borderDash:[5,4] },
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins: {
+        legend: { display:true, position:'top', labels:{ font:{size:12}, boxWidth:12, padding:12 } },
+        tooltip: { callbacks:{ label: ctx => ' 心の状態: '+ctx.parsed.y+' / 5' } }
+      },
+      scales: {
+        y: {
+          min:1, max:5,
+          title:{ display:true, text:'心の状態（1=最悪 / 5=最高）', font:{size:11}, color:'#888' },
+          ticks:{ stepSize:1, font:{size:11}, callback: v => ['','最悪','辛い','普通','良い','最高'][v]||v }
+        },
+        x: { ticks:{ font:{size:10}, autoSkip:true, maxTicksLimit:8, maxRotation:0 } }
+      }
+    }
+  });
+}
+
+document.getElementById('apply-btn').addEventListener('click', () => {
+  committed = { ...pending };
+  pendingTime = new Date();
+  updatePendingNote();
+  updateConflictBox();
+  renderGraph();
+});
+
+function setupGroup(id, key, attr) {
+  document.getElementById(id).addEventListener('click', e => {
+    const btn = e.target.closest('.sel-btn');
+    if (!btn) return;
+    document.querySelectorAll('#'+id+' .sel-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (key === 'deadline') {
+      pending.deadline    = parseFloat(btn.dataset.val);
+      pending.deadlineMin = parseInt(btn.dataset.min);
+    } else {
+      pending[key] = parseFloat(btn.dataset[attr]);
+    }
+    updateCards(); updateFinishBox(); updatePendingNote();
+  });
+}
+
+setupGroup('importance-btns',   'importance',  'val');
+setupGroup('deadline-btns',     'deadline',    'val');
+setupGroup('fatigue-btns',      'fatigue',     'val');
+setupGroup('duration-btns',     'duration',    'min');
+setupGroup('task-time-btns',    'taskTime',    'min');
+setupGroup('sabori-happy-btns', 'saboriHappy', 'val');
+
+document.getElementById('task-name').addEventListener('input',  () => { updateFinishBox(); updateConflictBox(); });
+document.getElementById('sabori-what').addEventListener('input', () => { updateCards(); updateConflictBox(); });
+
+updateTimeNow();
+updateFinishBox();
+updateCards();
+updateConflictBox();
+renderGraph();
+</script>
+</body>
+</html>
